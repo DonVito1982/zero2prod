@@ -13,7 +13,6 @@ path = "src/main.rs"
 name = "zero2prod"
 
 [dependencies]
-# actix-web = { version = "4", default-features = false }
 actix-web = { version = "4" }
 serde = { version = "1", features = ["derive"] }
 config = "0.11"

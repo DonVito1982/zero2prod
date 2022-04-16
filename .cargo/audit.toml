@@ -1,1 +1,2 @@
-# blank
+[advisories]
+ignore = [ "RUSTSEC-2020-0159"] # `chrono` localtime_r segfault
