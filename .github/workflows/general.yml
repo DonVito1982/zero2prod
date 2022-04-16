@@ -3,11 +3,11 @@ name: Rust
 on:
   push:
     branches:
-      - subscribe-feature
+      - subscribe-receiver
   pull_request:
     types: [ opened, synchronize, reopened ]
     branches:
-      - subscribe-feature
+      - subscribe-receiver
 
 env:
   CARGO_TERM_COLOR: always
