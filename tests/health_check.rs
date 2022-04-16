@@ -1,12 +1,17 @@
-use sqlx::{Connection, PgConnection};
+use sqlx::PgPool;
 use std::net::TcpListener;
 use zero2prod::configuration::get_configuration;
 use zero2prod::startup::run;
 
+pub struct TestApp {
+    pub address: String,
+    pub db_pool: PgPool,
+}
+
 #[actix_web::test]
 async fn health_check_works() {
     // Arrange
-    let address = spawn_app();
+    let address = spawn_app().await.address;
     let client = reqwest::Client::new();
 
     // Act
@@ -24,19 +29,13 @@ async fn health_check_works() {
 #[actix_web::test]
 async fn subscribe_returns_a_200_for_valid_form_data() {
     // Arrange
-    let app_address = spawn_app();
-    let configuration =
-        get_configuration().expect("Failed to read configuration");
-    let connection_string = configuration.database.connection_string();
-    let mut connection = PgConnection::connect(&connection_string)
-        .await
-        .expect("Failed to connect to Postgres.");
+    let test_app = spawn_app().await;
     let client = reqwest::Client::new();
 
     // Act
     let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
     let response = client
-        .post(&format!("{}/subscriptions", &app_address))
+        .post(&format!("{}/subscriptions", &test_app.address))
         .header("Content-Type", "application/x-www-form-urlencoded")
         .body(body)
         .send()
@@ -47,9 +46,10 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     assert_eq!(200, response.status().as_u16());
 
     let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
-        .fetch_one(&mut connection)
+        .fetch_one(&test_app.db_pool)
         .await
         .expect("Failed to fetch saved subscription.");
+
     assert_eq!("ursula_le_guin@gmail.com", saved.email);
     assert_eq!("le guin", saved.name);
 }
@@ -57,7 +57,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 #[actix_web::test]
 async fn subscribe_returns_a_400_when_data_is_missing() {
     // Arrange
-    let app_address = spawn_app();
+    let app_address = spawn_app().await.address;
     let client = reqwest::Client::new();
     let test_cases = vec![
         ("name=le%20guin", "missing the email"),
@@ -85,11 +85,24 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     }
 }
 
-fn spawn_app() -> String {
+async fn spawn_app() -> TestApp {
     let fail_text = "Failed to bind random port";
     let listener = TcpListener::bind("127.0.0.1:0").expect(fail_text);
     let port = listener.local_addr().unwrap().port();
-    let server = run(listener).expect("Failed to bind address");
+    let address = format!("http://127.0.0.1:{}", port);
+
+    let failed_configuration = "Failed to read configuration";
+    let configuration = get_configuration().expect(failed_configuration);
+    let connection_pool =
+        PgPool::connect(&configuration.database.connection_string())
+            .await
+            .expect("Failed to connect to Postgres.");
+
+    let server =
+        run(listener, connection_pool.clone()).expect("Failed to bind address");
     let _ = actix_web::rt::spawn(server);
-    format!("http://127.0.0.1:{}", port)
+    TestApp {
+        address,
+        db_pool: connection_pool,
+    }
 }
