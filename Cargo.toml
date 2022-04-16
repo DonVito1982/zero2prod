@@ -17,7 +17,7 @@ name = "zero2prod"
 actix-web = { version = "4" }
 serde = { version = "1", features = ["derive"] }
 config = "0.11"
-chrono = "0.4.19"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 uuid = { version = "0.8.1", features = ["v4"] }
 
 # Using table-like toml syntax to avoid a super-long line!
